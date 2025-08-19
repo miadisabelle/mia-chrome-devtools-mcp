@@ -45,6 +45,8 @@ cd chrome-devtools-mcp
 mcp install server.py -n "Chrome DevTools MCP" --with-editable .
 ```
 
+> **Note**: The `mcp` command is part of the [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk). Install it with `pip install mcp` if not already available.
+
 **All Installation Options:**
 
 ```bash
@@ -82,26 +84,38 @@ git clone https://github.com/benjaminr/chrome-devtools-mcp.git
 cd chrome-devtools-mcp
 ```
 
-2. **Install dependencies**
+2. **Install dependencies with UV (creates venv)**
 ```bash
-uv sync  # or pip install -r requirements.txt
+uv sync  # Creates .venv and installs dependencies
 ```
 
-3. **Add MCP server using Claude CLI**
+3. **Add MCP server using Claude CLI with absolute paths**
 
-**Quick setup (recommended):**
+**IMPORTANT**: Claude Code needs absolute paths to both the Python interpreter and the server script to work correctly.
+
+**Recommended setup using absolute paths:**
 ```bash
-# Add the server with environment variable
-claude mcp add chrome-devtools python server.py -e CHROME_DEBUG_PORT=9222
+# Get the absolute paths
+SERVER_PATH="$(pwd)/server.py"
+PYTHON_PATH="$(pwd)/.venv/bin/python"
+
+# Add the server with absolute paths
+claude mcp add chrome-devtools "$PYTHON_PATH" "$SERVER_PATH" -e CHROME_DEBUG_PORT=9222
+```
+
+**Alternative: Using the system Python (if dependencies are installed globally):**
+```bash
+# Only if you've installed dependencies globally
+claude mcp add chrome-devtools python "$(pwd)/server.py" -e CHROME_DEBUG_PORT=9222
 ```
 
 **With custom scope:**
 ```bash
 # Add to user scope (available across all projects)
-claude mcp add chrome-devtools python server.py -s user -e CHROME_DEBUG_PORT=9222
+claude mcp add chrome-devtools "$(pwd)/.venv/bin/python" "$(pwd)/server.py" -s user -e CHROME_DEBUG_PORT=9222
 
 # Add to project scope (only for this project)
-claude mcp add chrome-devtools python server.py -s project -e CHROME_DEBUG_PORT=9222
+claude mcp add chrome-devtools "$(pwd)/.venv/bin/python" "$(pwd)/server.py" -s project -e CHROME_DEBUG_PORT=9222
 ```
 
 4. **Verify installation**
@@ -109,9 +123,21 @@ claude mcp add chrome-devtools python server.py -s project -e CHROME_DEBUG_PORT=
 # List configured MCP servers
 claude mcp list
 
-# Get details about the server
+# Get details about the server (check that paths are absolute)
 claude mcp get chrome-devtools
+
+# The output should show absolute paths like:
+# Command: /Users/you/chrome-devtools-mcp/.venv/bin/python
+# Args: ["/Users/you/chrome-devtools-mcp/server.py"]
 ```
+
+**Common Path Issues and Solutions:**
+- **Problem**: "python: command not found" or "server.py not found"
+  - **Solution**: Use absolute paths as shown above
+- **Problem**: "ModuleNotFoundError" when server starts
+  - **Solution**: Use the venv Python interpreter that has dependencies installed
+- **Problem**: Server doesn't start or shows as disconnected
+  - **Solution**: Test the command manually: `/path/to/.venv/bin/python /path/to/server.py`
 
 ### Option 4: Manual Claude Desktop Setup
 
@@ -470,7 +496,7 @@ If the server appears in Claude but shows as "disabled", try these steps:
 4. **Restart Claude Desktop** completely (quit and reopen)
 
 ### Installation Issues
-- **MCP CLI not found**: Install MCP CLI with `pip install mcp` or `npm install -g @modelcontextprotocol/cli`
+- **MCP CLI not found**: Install MCP CLI from the [Python MCP SDK](https://github.com/modelcontextprotocol/python-sdk) with `pip install mcp`
 - **Server not appearing in Claude**: 
   - For MCP CLI: Run `mcp list` to verify the server is installed
   - For manual setup: Check Claude Desktop configuration file path and JSON syntax
@@ -520,8 +546,30 @@ claude mcp list
 # Get details about a specific server
 claude mcp get chrome-devtools
 
+# IMPORTANT: Verify paths are absolute, not relative
+# Good example output:
+#   Command: /Users/you/chrome-devtools-mcp/.venv/bin/python
+#   Args: ["/Users/you/chrome-devtools-mcp/server.py"]
+# Bad example output:
+#   Command: python
+#   Args: ["server.py"]
+
+# Test the exact command Claude Code will use
+/path/to/.venv/bin/python /path/to/server.py
+
 # Check if server is working
 claude mcp serve --help
+```
+
+**Step 3.5: Fix Path Issues (Claude Code specific)**
+```bash
+# If paths are relative, remove and re-add with absolute paths
+claude mcp remove chrome-devtools
+
+# Re-add with absolute paths
+SERVER_PATH="$(pwd)/server.py"
+PYTHON_PATH="$(pwd)/.venv/bin/python"
+claude mcp add chrome-devtools "$PYTHON_PATH" "$SERVER_PATH" -e CHROME_DEBUG_PORT=9222
 ```
 
 **Step 4: Reinstall if Needed**
@@ -554,6 +602,9 @@ claude mcp add chrome-devtools python server.py -s user -e CHROME_DEBUG_PORT=922
 | "Import error" | Check `pip install mcp websockets aiohttp` |
 | "Permission denied" | Use absolute paths in config |
 | "Server disabled" | Check Claude Desktop logs, restart Claude |
+| "python: command not found" (Claude Code) | Use absolute path to venv Python: `/path/to/.venv/bin/python` |
+| "server.py: No such file" (Claude Code) | Use absolute path to server: `/path/to/server.py` |
+| "ModuleNotFoundError" (Claude Code) | Use venv Python that has dependencies installed |
 
 ### Manual Configuration Fallback
 
@@ -575,20 +626,35 @@ If MCP CLI isn't working, add this to Claude Desktop config manually:
 ```
 
 **For Claude Code:**
-If the `claude mcp add` command isn't working, you can use the JSON format:
+If the `claude mcp add` command isn't working, you can use the JSON format with absolute paths:
 
 ```bash
-# Add server using JSON configuration
-claude mcp add-json chrome-devtools '{
-  "command": "python3",
-  "args": ["'$(pwd)'/server.py"],
+# Get absolute paths first
+SERVER_PATH="$(pwd)/server.py"
+PYTHON_PATH="$(pwd)/.venv/bin/python"
+
+# Add server using JSON configuration with absolute paths
+claude mcp add-json chrome-devtools "{
+  \"command\": \"$PYTHON_PATH\",
+  \"args\": [\"$SERVER_PATH\"],
+  \"env\": {
+    \"CHROME_DEBUG_PORT\": \"9222\"
+  }
+}"
+
+# Or if you have it working in Claude Desktop, import from there
+claude mcp add-from-claude-desktop
+```
+
+**Example of correct Claude Code configuration (with absolute paths):**
+```json
+{
+  "command": "/Users/you/chrome-devtools-mcp/.venv/bin/python",
+  "args": ["/Users/you/chrome-devtools-mcp/server.py"],
   "env": {
     "CHROME_DEBUG_PORT": "9222"
   }
-}'
-
-# Or import from Claude Desktop if you have it configured there
-claude mcp add-from-claude-desktop
+}
 ```
 
 ### Connection Issues
